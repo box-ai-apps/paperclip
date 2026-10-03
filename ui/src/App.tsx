@@ -88,6 +88,7 @@ import { Secrets } from "./pages/Secrets";
 import { CompanyImport } from "./pages/CompanyImport";
 import { DesignGuide } from "./pages/DesignGuide";
 import { InstanceExperimentalSettings } from "./pages/InstanceExperimentalSettings";
+import { RelaySettingsPage } from "./pages/RelaySettings";
 import { InstanceAccess } from "./pages/InstanceAccess";
 import { ProfileSettings } from "./pages/ProfileSettings";
 import { PluginManager } from "./pages/PluginManager";
@@ -248,6 +249,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       </Route>
       <Route element={<HiddenSettingsPageGate pageKey="instance.experimental" />}>
         <Route path="company/settings/instance/experimental" element={<InstanceExperimentalSettings />} />
+        <Route path="company/settings/instance/relay" element={<RelaySettingsPage />} />
       </Route>
       <Route element={<HiddenSettingsPageGate pageKey="instance.plugins" />}>
         <Route path="company/settings/instance/plugins" element={<PluginManager />} />

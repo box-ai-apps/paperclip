@@ -50,6 +50,7 @@ import {
   Plus,
   Search,
   Settings,
+  ShieldAlert,
   Target,
   Trash2,
   Upload,
@@ -2472,6 +2473,50 @@ export function DesignGuide() {
 
       <Section title="AI Connections">
         <AiConnectionDesignExamples />
+      </Section>
+
+      <Section title="Relay status and credential states">
+        <p className="text-sm text-muted-foreground">
+          The relay settings surface. The status badge vocabulary and the
+          refuse-to-publish banner are the reusable parts; the credential rows
+          follow the entity row pattern.
+        </p>
+        <SubSection title="Connection states">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge>Connected</Badge>
+            <Badge variant="secondary">Connecting</Badge>
+            <Badge variant="secondary">Disconnected</Badge>
+            <Badge variant="destructive">Refused</Badge>
+            <Badge variant="outline">Disabled</Badge>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            <span className="font-mono">refused</span> is deliberately distinct from{" "}
+            <span className="font-mono">disconnected</span>: a refusal has an actionable cause
+            (subscription inactive, credential revoked), a disconnect may just be a sleeping laptop.
+          </p>
+        </SubSection>
+        <SubSection title="Refuse-to-publish banner">
+          <Card className="border-destructive/40 p-4">
+            <div className="flex gap-3">
+              <ShieldAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">This instance cannot publish yet</p>
+                <p className="text-sm text-muted-foreground">
+                  It runs in <span className="font-mono">local_trusted</span>, which grants
+                  unauthenticated access to anything that can reach the server.
+                </p>
+              </div>
+            </div>
+          </Card>
+        </SubSection>
+        <SubSection title="Credential states">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge>Active</Badge>
+            <Badge variant="secondary">Unused</Badge>
+            <Badge variant="outline">Revoked</Badge>
+            <Badge variant="outline">Expired</Badge>
+          </div>
+        </SubSection>
       </Section>
 
       <Section title="Built-in Agent Lifecycle Chips">

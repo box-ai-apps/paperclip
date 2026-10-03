@@ -15,6 +15,7 @@ const items = [
   { value: "instance-environments", label: "Environments", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/environments` },
   { value: "instance-access", label: "Access", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/access` },
   { value: "instance-experimental", label: "Experimental", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/experimental` },
+  { value: "instance-relay", label: "Relay", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/relay` },
   { value: "instance-plugins", label: "Plugins", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/plugins` },
   { value: "instance-adapters", label: "Adapters", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/adapters` },
 ] as const;
@@ -31,6 +32,7 @@ const hiddenSettingKeyByTab: Partial<Record<CompanySettingsTab, string>> = {
   "instance-environments": "instance.environments",
   "instance-access": "instance.access",
   "instance-experimental": "instance.experimental",
+  "instance-relay": "instance.relay",
   "instance-plugins": "instance.plugins",
   "instance-adapters": "instance.adapters",
 };
@@ -50,6 +52,10 @@ export function getCompanySettingsTab(pathname: string): CompanySettingsTab {
 
   if (pathname.includes(`${INSTANCE_SETTINGS_PATH_PREFIX}/experimental`)) {
     return "instance-experimental";
+  }
+
+  if (pathname.includes(`${INSTANCE_SETTINGS_PATH_PREFIX}/relay`)) {
+    return "instance-relay";
   }
 
   if (pathname.includes(`${INSTANCE_SETTINGS_PATH_PREFIX}/plugins`)) {

@@ -85,6 +85,8 @@ describe("CompanySettingsNav", () => {
     expect(getCompanySettingsTab("/company/settings/instance/access")).toBe("instance-access");
     expect(getCompanySettingsTab("/PAP/company/settings/instance/access")).toBe("instance-access");
     expect(getCompanySettingsTab("/company/settings/instance/experimental")).toBe("instance-experimental");
+    expect(getCompanySettingsTab("/company/settings/instance/relay")).toBe("instance-relay");
+    expect(getCompanySettingsTab("/PAP/company/settings/instance/relay")).toBe("instance-relay");
     expect(getCompanySettingsTab("/PAP/company/settings/instance/plugins/example")).toBe("instance-plugins");
     expect(getCompanySettingsTab("/company/settings/instance/adapters")).toBe("instance-adapters");
   });
@@ -129,6 +131,7 @@ describe("CompanySettingsNav", () => {
           { value: "instance-environments", label: "Environments" },
           { value: "instance-access", label: "Access" },
           { value: "instance-experimental", label: "Experimental" },
+          { value: "instance-relay", label: "Relay" },
           { value: "instance-plugins", label: "Plugins" },
           { value: "instance-adapters", label: "Adapters" },
         ],
@@ -170,6 +173,7 @@ describe("CompanySettingsNav", () => {
       "instance-environments",
       "instance-access",
       "instance-experimental",
+      "instance-relay",
       "instance-adapters",
     ]);
 
