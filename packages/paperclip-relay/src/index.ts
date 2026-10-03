@@ -11,6 +11,20 @@
  * `paperclip-relay-server`, which vendors `protocol/conformance/vectors.ts` from
  * here and implements the same codec against it.
  */
+export {
+  type RelayStreamByteCounts,
+  serveRelayHttpStream,
+  type ServeRelayHttpStreamInput,
+} from "./tunnel/local-request.js";
+export {
+  AUTHORITY_HEADERS,
+  HOP_BY_HOP_HEADERS,
+  type NormalizedRelayRequest,
+  normalizeRelayedRequestHeaders,
+  RelayNormalizeError,
+  type RelayNormalizeOptions,
+} from "./tunnel/normalize.js";
+
 export * from "./protocol/index.js";
 export {
   createBackoffSequence,
