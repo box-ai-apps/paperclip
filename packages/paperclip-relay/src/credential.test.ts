@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   hashRelayCredential,
+  isRelayCredentialLive,
   isRelayCredentialShaped,
   issueRelayCredential,
   parseBearerRelayCredential,
@@ -116,6 +117,42 @@ describe("redactRelayCredential", () => {
     // something it does not recognise would hide the very leak it exists to catch.
     expect(redactRelayCredential("Bearer ghp_somethingElse")).toBe("Bearer ghp_somethingElse");
     expect(redactRelayCredential("pcp_relay_short")).toBe("pcp_relay_short");
+  });
+});
+
+describe("isRelayCredentialLive", () => {
+  const now = new Date("2026-06-01T00:00:00.000Z");
+
+  it("treats a credential with neither bound as live", () => {
+    expect(isRelayCredentialLive({ revokedAt: null, expiresAt: null }, now)).toBe(true);
+  });
+
+  it("treats a future revocation and expiry as live", () => {
+    expect(
+      isRelayCredentialLive(
+        { revokedAt: new Date("2026-07-01T00:00:00Z"), expiresAt: new Date("2026-07-01T00:00:00Z") },
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  it("treats a past revocation as not live", () => {
+    expect(isRelayCredentialLive({ revokedAt: new Date("2026-05-01T00:00:00Z"), expiresAt: null }, now)).toBe(
+      false,
+    );
+  });
+
+  it("treats a past expiry as not live", () => {
+    expect(isRelayCredentialLive({ revokedAt: null, expiresAt: new Date("2026-05-01T00:00:00Z") }, now)).toBe(
+      false,
+    );
+  });
+
+  it("treats the exact instant of revocation or expiry as not live", () => {
+    // `<=` not `<`: a credential expiring at the evaluation instant has expired.
+    const at = new Date(now);
+    expect(isRelayCredentialLive({ revokedAt: at, expiresAt: null }, now)).toBe(false);
+    expect(isRelayCredentialLive({ revokedAt: null, expiresAt: at }, now)).toBe(false);
   });
 });
 

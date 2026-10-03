@@ -46,7 +46,16 @@ export const RELAY_ERROR_CODES = [
   // --- negotiation and session -------------------------------------------
   /** Neither side speaks a version the other accepts. */
   "no_common_protocol_version",
-  /** The control-channel credential was absent, malformed, or not recognised. */
+  /**
+   * The control-channel credential was absent, malformed, unrecognised, or has
+   * no usable row in the instance.
+   *
+   * The only identity-adjacent code in the vocabulary. There is deliberately no
+   * "unknown actor" and no actor field on `open_stream`: the relay never names a
+   * human, and the subscriber's own Paperclip session authenticates the request
+   * inside the instance. A relay that could assert an identity would be a relay
+   * an operator could use to escalate.
+   */
   "unauthorized_control",
   /** The credential resolved to a locally revoked relay credential. */
   "credential_revoked",
@@ -77,15 +86,6 @@ export const RELAY_ERROR_CODES = [
   "deployment_mode_unsupported",
   /** Relay environment is absent, so there is nothing to publish. */
   "relay_not_configured",
-  /**
-   * The relay named an actor this instance has no relay credential for.
-   *
-   * A relay is not trusted to mint identities. Each actor must correspond to a
-   * credential the instance owner issued locally, so adding an instance-admin
-   * user to the instance later does not silently widen what the relay can act
-   * as.
-   */
-  "unknown_actor",
 
   // --- transport ----------------------------------------------------------
   /** Unexpected failure. Never carries internal detail. */

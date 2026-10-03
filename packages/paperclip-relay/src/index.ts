@@ -21,11 +21,15 @@ export {
 } from "./config.js";
 export {
   hashRelayCredential,
+  isRelayCredentialLive,
   isRelayCredentialShaped,
   issueRelayCredential,
   type IssuedRelayCredential,
   parseBearerRelayCredential,
   redactRelayCredential,
+  type RelayCredentialRecord,
+  type RelayCredentialResolution,
+  type RelayCredentialStore,
   RELAY_CREDENTIAL_PREFIX,
   RELAY_CREDENTIAL_REDACTION,
   verifyRelayCredential,

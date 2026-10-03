@@ -1,12 +1,25 @@
 /**
  * Relay credential issue, storage, and verification.
  *
- * A relay credential authorises one *local board user* to be represented by the
- * relay. That scoping is the whole point of the design, and it is what keeps the
- * relay operator's reach bounded: the relay can act as the users an instance
- * owner explicitly issued credentials for, and as nobody else. Adding an
- * instance-admin user to the instance later does not widen the relay's authority,
- * because no credential was issued for them.
+ * A relay credential answers exactly one question: "does this control socket
+ * belong to the instance that owns this slug?" It says nothing about which human
+ * is using the tunnel, because the relay cannot know and must not be believed
+ * if it claimed to.
+ *
+ * That is worth being explicit about, because the obvious alternative — a
+ * per-user credential plus a trusted header telling the instance which local user
+ * each stream acts as — is what this design deliberately does not do:
+ *
+ * - The subscriber's own Paperclip session rides the tunnel, so the instance
+ *   authenticates the request itself, with its own membership and company
+ *   scoping. The audit log describes what actually happened.
+ * - The relay has no knowledge of Paperclip's users or roles, so anything it
+ *   asserted would be a claim the instance had to take on faith.
+ * - An operator running the relay is already in the data path and can read or
+ *   alter bytes; that is inherent to a relay. What they must not be able to do
+ *   is escalate, and with no actor assertion there is nothing to escalate into —
+ *   every injected request still needs a valid Paperclip credential that
+ *   originated from the subscriber.
  *
  * Tokens carry 256 bits of entropy from the CSPRNG, so they are hashed with
  * SHA-256 rather than a password KDF. This is the same reasoning, and the same
@@ -116,4 +129,55 @@ export function parseBearerRelayCredential(headerValue: unknown): string | null 
   if (!match) return null;
   const token = match[1]?.trim() ?? "";
   return isRelayCredentialShaped(token) ? token : null;
+}
+
+/** A row from the instance's relay credential table. */
+export interface RelayCredentialRecord {
+  readonly id: string;
+  readonly tokenHash: string;
+  readonly revokedAt: Date | null;
+  readonly expiresAt: Date | null;
+}
+
+/**
+ * Outcome of resolving a presented credential.
+ *
+ * `unauthorized` covers every "no" — absent, unknown, revoked, expired — on
+ * purpose. Distinguishing them for an unauthenticated peer hands an attacker a
+ * probe for which tokens once existed, so the codes are equal and only the
+ * instance's own audit log tells them apart.
+ */
+export type RelayCredentialResolution =
+  | { readonly ok: true; readonly credential: RelayCredentialRecord }
+  | { readonly ok: false; readonly reason: "unauthorized" };
+
+/**
+ * Where the dialer gets its credential.
+ *
+ * An interface rather than a query so the dialer, the control socket, and the
+ * stream server can all be tested without a database. The production
+ * implementation lives in `server/src/services/relay` and is the only thing that
+ * knows about drizzle.
+ */
+export interface RelayCredentialStore {
+  /**
+   * Resolve a presented token to a live credential row.
+   *
+   * @param now Injectable clock so expiry is testable without waiting.
+   */
+  resolveByToken(token: string, now?: Date): Promise<RelayCredentialResolution>;
+}
+
+/**
+ * True when a row is neither revoked nor expired at `now`.
+ *
+ * Exported so the store implementation and its tests agree on one definition.
+ */
+export function isRelayCredentialLive(
+  record: Pick<RelayCredentialRecord, "revokedAt" | "expiresAt">,
+  now: Date,
+): boolean {
+  if (record.revokedAt !== null && record.revokedAt.getTime() <= now.getTime()) return false;
+  if (record.expiresAt !== null && record.expiresAt.getTime() <= now.getTime()) return false;
+  return true;
 }

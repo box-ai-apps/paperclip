@@ -110,14 +110,14 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
     },
   },
   {
-    name: "stream reject",
-    body: `{"v":1,"type":"stream_reject","streamId":"s-1","code":"unknown_actor","message":"no relay credential for that user"}\n`,
+    name: "stream reject for an exhausted local stream ceiling",
+    body: `{"v":1,"type":"stream_reject","streamId":"s-1","code":"stream_limit_reached","message":"stream refused"}\n`,
     expectMessage: {
       v: 1,
       type: "stream_reject",
       streamId: "s-1",
-      code: "unknown_actor",
-      message: "no relay credential for that user",
+      code: "stream_limit_reached",
+      message: "stream refused",
     },
   },
   {
@@ -157,8 +157,8 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
     },
   },
   {
-    name: "open stream for a websocket with subscriber credentials preserved",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"websocket","method":"GET","path":"/api/realtime/live-events?companyId=c-1","headers":{"authorization":"Bearer pcp_board_x","cookie":"paperclip-x.session_token=abc","sec-websocket-version":"13"},"actorUserId":"usr_01H"}\n`,
+    name: "open stream for a websocket carrying the subscriber's own session",
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"websocket","method":"GET","path":"/api/realtime/live-events?companyId=c-1","headers":{"authorization":"Bearer pcp_board_x","cookie":"paperclip-x.session_token=abc","sec-websocket-version":"13"}}\n`,
     expectMessage: {
       v: 1,
       type: "open_stream",
@@ -172,12 +172,11 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
         cookie: "paperclip-x.session_token=abc",
         "sec-websocket-version": "13",
       },
-      actorUserId: "usr_01H",
     },
   },
   {
     name: "open stream for a POST body",
-    body: `{"v":1,"type":"open_stream","streamId":"s-2","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"content-type":"application/json"},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-2","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"content-type":"application/json"}}\n`,
     expectMessage: {
       v: 1,
       type: "open_stream",
@@ -187,8 +186,14 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
       method: "POST",
       path: "/api/issues",
       headers: { "content-type": "application/json" },
-      actorUserId: "usr_01H",
     },
+  },
+  {
+    name: "open stream naming an actor is refused as an unknown field",
+    // The relay must not be able to say who a stream acts as. If this ever
+    // decodes, the no-escalation property of the design has been lost.
+    body: `{"v":1,"type":"open_stream","streamId":"s-3","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"actorUserId":"usr_01H"}\n`,
+    expectCode: "unknown_field",
   },
   {
     name: "close stream with no code",
@@ -202,13 +207,13 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
   },
   {
     name: "error prose carrying non-ASCII text",
-    body: `{"v":1,"type":"stream_reject","streamId":"s-1","code":"unknown_actor","message":"no relay credential for Renée"}\n`,
+    body: `{"v":1,"type":"stream_reject","streamId":"s-1","code":"stream_limit_reached","message":"stream refused for Renée"}\n`,
     expectMessage: {
       v: 1,
       type: "stream_reject",
       streamId: "s-1",
-      code: "unknown_actor",
-      message: "no relay credential for Renée",
+      code: "stream_limit_reached",
+      message: "stream refused for Renée",
     },
   },
 
@@ -304,84 +309,84 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
   // --- rejected: smuggling surface ----------------------------------------
   {
     name: "relayed host header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"host":"evil.example.com"},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"host":"evil.example.com"}}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "relayed content-length header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"content-length":"4"},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"content-length":"4"}}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "relayed transfer-encoding header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"transfer-encoding":"chunked"},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"transfer-encoding":"chunked"}}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "relayed x-forwarded-for header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-forwarded-for":"10.0.0.1"},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-forwarded-for":"10.0.0.1"}}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "relayed upgrade header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"websocket","method":"GET","path":"/ws","headers":{"upgrade":"websocket"},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"websocket","method":"GET","path":"/ws","headers":{"upgrade":"websocket"}}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "header value carrying CRLF",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-note":"a\\r\\nX-Injected: yes"},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-note":"a\\r\\nX-Injected: yes"}}\n`,
     expectCode: "invalid_header_value",
   },
   {
     name: "header value carrying a bare NUL",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-note":"a\\u0000b"},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-note":"a\\u0000b"}}\n`,
     expectCode: "invalid_header_value",
   },
   {
     name: "uppercase header name",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"X-Note":"a"},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"X-Note":"a"}}\n`,
     expectCode: "invalid_header_name",
   },
   {
     name: "header map sent as an array",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":[["a","b"]],"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":[["a","b"]]}\n`,
     expectCode: "invalid_field",
   },
   {
     name: "path that is not origin-form",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"api/issues","headers":{},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"api/issues","headers":{}}\n`,
     expectCode: "invalid_path",
   },
   {
     name: "path beginning with double slash",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"//evil.example.com/x","headers":{},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"//evil.example.com/x","headers":{}}\n`,
     expectCode: "invalid_path",
   },
   {
     name: "path carrying a control character",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/a\\u0007b","headers":{},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/a\\u0007b","headers":{}}\n`,
     expectCode: "invalid_path",
   },
   {
     name: "unsupported HTTP method",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"TRACE","path":"/","headers":{},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"TRACE","path":"/","headers":{}}\n`,
     expectCode: "invalid_method",
   },
   {
     name: "lowercase HTTP method",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"get","path":"/","headers":{},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"get","path":"/","headers":{}}\n`,
     expectCode: "invalid_method",
   },
 
   // --- rejected: stream identity -----------------------------------------
   {
     name: "stream nonce of the wrong length",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"AAAA","kind":"http","method":"GET","path":"/","headers":{},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"AAAA","kind":"http","method":"GET","path":"/","headers":{}}\n`,
     expectCode: "invalid_field",
   },
   {
     name: "stream nonce that is not base64url",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${"A".repeat(42)}+","kind":"http","method":"GET","path":"/","headers":{},"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${"A".repeat(42)}+","kind":"http","method":"GET","path":"/","headers":{}}\n`,
     expectCode: "invalid_field",
   },
   {

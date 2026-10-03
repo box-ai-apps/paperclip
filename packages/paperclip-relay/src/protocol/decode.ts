@@ -27,7 +27,6 @@ import { PROTOCOL_VERSION } from "./version.js";
 import { DuplicateJsonKeyError, parseJsonNoDuplicateKeys } from "./strict-json.js";
 import {
   MAX_CONTROL_FRAME_BYTES,
-  assertActorUserId,
   assertCapabilityList,
   assertHeaderMap,
   assertHttpStatus,
@@ -60,7 +59,7 @@ const ALLOWED_FIELDS: Readonly<Record<RelayMessageType, readonly string[]>> = {
   hello_ok: ["v", "type", "protocolVersion", "sessionId", "heartbeatIntervalMs", "maxConcurrentStreams", "capabilities"],
   hello_reject: ["v", "type", "code", "message"],
   heartbeat: ["v", "type", "seq"],
-  open_stream: ["v", "type", "streamId", "streamNonce", "kind", "method", "path", "headers", "actorUserId"],
+  open_stream: ["v", "type", "streamId", "streamNonce", "kind", "method", "path", "headers"],
   stream_reject: ["v", "type", "streamId", "code", "message"],
   close_stream: ["v", "type", "streamId", "code"],
   response_head: ["v", "type", "streamId", "status", "headers"],
@@ -216,7 +215,6 @@ function decodeOpenStream(obj: Record<string, unknown>, v: number): RelayOpenStr
     method: assertMethod(obj.method),
     path: assertOriginFormPath(obj.path),
     headers,
-    actorUserId: assertActorUserId(obj.actorUserId),
   };
 }
 

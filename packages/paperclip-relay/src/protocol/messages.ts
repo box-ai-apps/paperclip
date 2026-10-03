@@ -77,6 +77,14 @@ export interface RelayHeartbeatMessage extends MessageBase {
  * half opens `ws(s)://<relay>/tunnel?t=<nonce>` and the relay pairs that socket
  * with the waiting browser connection, so an attacker who guesses a `streamId`
  * cannot join the stream without also being the party that minted the nonce.
+ *
+ * There is deliberately no `actorUserId` field. The relay does not assert which
+ * human is on the other end, and cannot: it has no knowledge of Paperclip's users
+ * or roles. The subscriber's own session credential rides the tunnel and the
+ * instance authenticates it with its normal session path, so company scoping,
+ * memberships, and the audit log all describe what actually happened. A relay
+ * that could name an actor would be a relay an operator could use to escalate,
+ * which is the one capability this design gives up.
  */
 export interface RelayOpenStreamMessage extends MessageBase {
   readonly type: "open_stream";
@@ -86,8 +94,6 @@ export interface RelayOpenStreamMessage extends MessageBase {
   readonly method: string;
   readonly path: string;
   readonly headers: Record<string, string>;
-  /** Local Paperclip user this stream acts as. Must map to an issued credential. */
-  readonly actorUserId: string;
 }
 
 /** Client half -> relay. This stream will not be served. */
