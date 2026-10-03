@@ -33,6 +33,7 @@ import { initTelemetryFromConfigFile, flushTelemetry } from "./telemetry.js";
 import { registerWorktreeCommands } from "./commands/worktree.js";
 import { registerPluginCommands } from "./commands/client/plugin.js";
 import { registerClientAuthCommands } from "./commands/client/auth.js";
+import { registerClientRelayCommands } from "./commands/client/relay.js";
 import { registerConnectCommand } from "./commands/client/connect.js";
 import { registerTokenCommands } from "./commands/client/token.js";
 import { registerPromptCommands } from "./commands/client/prompt.js";
@@ -276,6 +277,11 @@ auth
   .action(bootstrapCeoInvite);
 
 registerClientAuthCommands(auth);
+
+const relay = program
+  .command("relay")
+  .description("Publish this instance through a relay so it can be reached from anywhere");
+registerClientRelayCommands(relay);
 
 async function main(): Promise<void> {
   warnIfUnsupportedNodeVersion(process.versions.node, (message) => console.warn(message));

@@ -88,6 +88,8 @@ import { smokeLabRoutes } from "./routes/smoke-lab.js";
 import { costRoutes } from "./routes/costs.js";
 import { activityRoutes } from "./routes/activity.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
+import { relayRoutes } from "./routes/relay.js";
+import type { RelayRuntime } from "./services/relay/index.js";
 import { attentionRoutes } from "./routes/attention.js";
 import { decisionTrainingRoutes } from "./routes/decision-training.js";
 import { decisionRoutes } from "./routes/decisions.js";
@@ -502,6 +504,13 @@ export async function createApp(
     managedPluginAutoInstall?: readonly string[] | null;
     /** Test override for the bundled plugin catalog root. */
     bundledPluginCatalogRoot?: string;
+    /**
+     * Relay publishing runtime, when the instance has one.
+     *
+     * Optional so self-hosted deployments keep working with no relay env set at
+     * all: `relayRoutes` reports `enabled: false` and issues nothing.
+     */
+    relayRuntime?: RelayRuntime | null;
   },
 ) {
   const app = express();
@@ -654,6 +663,11 @@ export async function createApp(
   );
   api.use(openApiRoutes());
   api.use("/cloud", cloudRoutes());
+  // Instance-scoped, not company-scoped: a relay credential authenticates the
+  // instance to the relay, and there is deliberately no per-user credential or
+  // actor-naming endpoint. The router's own guards require instance admin for
+  // everything that issues or revokes.
+  api.use("/relay", relayRoutes(db, opts.relayRuntime ?? null));
   api.use("/companies", companyRoutes(db, opts.storageService));
   api.use(llmRoutes(db));
   api.use(folderRoutes(db));

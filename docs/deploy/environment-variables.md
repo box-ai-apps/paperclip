@@ -29,6 +29,26 @@ All environment variables that Paperclip uses for server configuration.
 | `PAPERCLIP_HIDDEN_SETTINGS` | (unset) | Comma-separated settings surfaces to hide from the UI and floor at the API, for operators hosting Paperclip for others (managed cloud, internal shared server). See [Hiding settings surfaces](#hiding-settings-surfaces). |
 | `PAPERCLIP_SETTING_DEFAULTS` | (unset) | JSON object replacing the schema default of selected instance settings, for hosting operators. See [Operator setting defaults](#operator-setting-defaults). |
 
+### Relay publishing
+
+Lets an instance publish itself through a relay so it can be reached from
+anywhere without opening an inbound port. See [Relay publishing](relay.md).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PAPERCLIP_RELAY_ENABLED` | (unset) | Only `true` or `1` turns publishing on. Anything else, including a typo, leaves it off rather than silently publishing an instance to the internet. |
+| `PAPERCLIP_RELAY_URL` | (unset) | Relay control endpoint, `ws:` or `wss:`. Required when enabled. Embedded credentials are refused. |
+| `PAPERCLIP_RELAY_INSTANCE_SLUG` | (unset) | The slug this instance publishes as; becomes a DNS label on the relay. Lowercase alphanumeric and dashes, 2-40 characters. Required when enabled. |
+| `PAPERCLIP_RELAY_MAX_STREAMS` | `8` | Local ceiling on concurrently served streams. The effective limit is the smaller of this and the relay's advertised one, so the relay cannot talk an instance into serving more than it is willing to. |
+| `PAPERCLIP_RELAY_ALLOW_INSECURE_TRANSPORT` | (unset) | Set to `true` to permit a `ws:` control endpoint. The relay credential is presented on that socket as a bearer token, so a plain connection hands it to anyone on the path. Intended only for deliberate testing on a trusted network. |
+| `PAPERCLIP_RELAY_STATE_PATH` | `$PAPERCLIP_HOME/relay-token.json` | Where the issued relay credential is written, `0600`. Not for the credential to live in the environment: it is a 256-bit secret and would end up in `docker inspect` output and process listings. |
+
+Publishing also refuses to start when `PAPERCLIP_DEPLOYMENT_MODE=local_trusted`.
+That mode grants unauthenticated instance-admin to anything that can reach the
+server, and a relay exists to make the server reachable from the internet. Set
+`PAPERCLIP_DEPLOYMENT_MODE=authenticated`, create a board user, and claim the
+instance from the browser first.
+
 Daytona connectivity for `paperclip_runner` uses authenticated provider
 WebSocket ingress and follows the instance experimental setting
 `enableNativeRunner` (default `false`). There is no separate ingress opt-in.

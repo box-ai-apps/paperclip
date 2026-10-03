@@ -228,6 +228,11 @@ export class RelayDialer {
     return this.negotiatedVersion;
   }
 
+  /** True while a negotiated session is live and messages can be sent. */
+  get isReady(): boolean {
+    return this.state === "ready" && this.socket !== null;
+  }
+
   /** The heartbeat interval currently in force, in milliseconds. */
   get heartbeatInterval(): number {
     return this.heartbeatIntervalMs;
@@ -304,6 +309,26 @@ export class RelayDialer {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Send a message the stream handler produced.
+   *
+   * The handler owns stream lifecycle, but the control socket owns encoding,
+   * versioning, and the knowledge of whether a session is still live. Exposing
+   * this keeps those facts in one place rather than handing the handler a raw
+   * socket.
+   *
+   * @returns false when the session is gone, so the handler can stop writing.
+   */
+  sendProtocolMessage(message: RelayMessage): boolean {
+    if (this.state !== "ready" || this.socket === null) return false;
+    try {
+      this.send(message);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private connect(): void {

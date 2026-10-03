@@ -60,6 +60,7 @@ import { getOperatorSettingDefaults } from "./services/setting-defaults.js";
 import { setupEnvironmentCustomImageTerminalWebSocketServer } from "./realtime/environment-custom-image-terminal-ws.js";
 import { setupLiveEventsWebSocketServer } from "./realtime/live-events-ws.js";
 import { setupRunnerPrpWebSocketServer } from "./realtime/runner-prp-ws.js";
+import { RelayRuntime } from "./services/relay/index.js";
 import { cloudActorHeaderSourceFromHeaders, resolveCloudTenantActor } from "./middleware/auth.js";
 import {
   feedbackService,
@@ -883,10 +884,22 @@ async function startServerWithDatabaseTeardown(
   // document parsed fail-closed above (`plugins.autoInstall`). Absent env means
   // self-hosted: createApp falls back to its built-in kubernetes-only default.
   const managedPluginAutoInstall = managedConfig?.plugins.autoInstall ?? null;
+  // Constructed before createApp so the board routes share this instance; started
+  // after the listener binds. The deployment-mode gate and the configuration
+  // check both run in `start()`, so a misconfigured or unsafe instance refuses at
+  // startup with a message rather than sitting there silently not publishing.
+  const relayRuntime = new RelayRuntime({
+    db: db as any,
+    deploymentMode: config.deploymentMode,
+    localBaseUrl: `http://127.0.0.1:${listenPort}`,
+    localAuthority: `127.0.0.1:${listenPort}`,
+    paperclipVersion: process.env.npm_package_version ?? null,
+  });
   const app = await createApp(db as any, {
     uiMode,
     serverPort: listenPort,
     storageService,
+    relayRuntime,
     feedbackExportService: feedback,
     databaseBackupService: {
       runManualBackup: async () => {
@@ -1001,6 +1014,18 @@ async function startServerWithDatabaseTeardown(
     });
   });
   startupListenerBound = true;
+
+  // Started only once the listener is bound, so the dialer never advertises a
+  // local origin that is not yet accepting connections. Constructed above, before
+  // createApp, so the board routes can reach the same instance.
+  relayRuntime.start();
+  relayRuntime.onStatus((status) => {
+    if (status.state !== "refused") return;
+    logger.error(
+      { code: status.lastErrorCode, message: status.lastErrorMessage },
+      "relay publishing is refused",
+    );
+  });
 
   try {
     const result = await workspaceOperationService(db as any)
@@ -1936,6 +1961,10 @@ async function startServerWithDatabaseTeardown(
     heartbeatSchedulerStopped = true;
     unsubscribeChatCompletions();
     clearInterval(executionControlInterval);
+    // Stop publishing before anything else, so the relay sees a clean end of
+    // session and stops routing browsers at us while the rest of the instance
+    // winds down. Live streams are torn down with it.
+    relayRuntime.stop();
     if (heartbeatSchedulerInterval) {
       clearInterval(heartbeatSchedulerInterval);
       heartbeatSchedulerInterval = null;
