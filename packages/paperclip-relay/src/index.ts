@@ -13,6 +13,23 @@
  */
 export * from "./protocol/index.js";
 export {
+  createBackoffSequence,
+  type BackoffOptions,
+  type BackoffSequence,
+  isPermanentRelayError,
+} from "./dialer/backoff.js";
+export {
+  type RelayControlSocket,
+  type RelayControlSocketFactory,
+  RelayDialer,
+  type RelayDialerEvent,
+  type RelayDialerListener,
+  type RelayDialerOptions,
+  type RelayDialerState,
+  type RelayStreamDecision,
+  type RelayStreamRequest,
+} from "./dialer/control-client.js";
+export {
   isRelayEnabled,
   loadRelayConfig,
   type RelayClientConfig,
