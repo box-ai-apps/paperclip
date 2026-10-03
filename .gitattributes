@@ -1,3 +1,7 @@
 patches/*.patch whitespace=-space-before-tab
 
 *.sql text eol=lf
+
+# Committed sha256 digests are computed over these files, so their bytes must
+# be identical on every platform or the generated manifests drift.
+packages/paperclip-runner/protocol/** text eol=lf
