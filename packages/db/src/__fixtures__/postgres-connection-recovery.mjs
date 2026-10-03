@@ -95,7 +95,13 @@ try {
       pending = [0, 1, 2].map(() => capture(tx.unsafe("select pg_sleep(30)")));
       started.resolve(row.pid);
       const errors = await Promise.all(pending);
-      assert.ok(errors.every((error) => ["57P01", "CONNECTION_CLOSED"].includes(error.code)));
+      // PostgreSQL ends the connection on terminate, but the client observes it
+      // differently by platform: on POSIX the driver surfaces the protocol-level
+      // 57P01 admin-shutdown (or a CONNECTION_CLOSED write), while on Windows a
+      // terminated backend's socket shows up as a read-side ECONNRESET rather
+      // than the 57P01 SQLSTATE. The disconnect is still the scenario under
+      // test, so ECONNRESET is an acceptable observation here.
+      assert.ok(errors.every((error) => ["57P01", "CONNECTION_CLOSED", "ECONNRESET"].includes(error.code)));
     };
     const reserved = mode === "reserve-queue" ? await sql.reserve() : null;
     const task = reserved ? work(reserved) : capture(sql.begin(work));
