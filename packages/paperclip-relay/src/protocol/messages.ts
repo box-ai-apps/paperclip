@@ -55,6 +55,17 @@ export interface RelayHelloOkMessage extends MessageBase {
   readonly heartbeatIntervalMs: number;
   readonly maxConcurrentStreams: number;
   readonly capabilities: string[];
+  /**
+   * Where to open per-stream tunnel sockets, e.g.
+   * `wss://relay.example.com/tunnel`.
+   *
+   * Sent by the relay rather than configured locally so the two cannot drift
+   * apart, and validated on arrival to be the same origin as the control socket.
+   * A relay that could redirect streams to another host would be able to read
+   * every byte a subscriber sent, and a stale local setting would break streams
+   * with a much harder-to-diagnose failure.
+   */
+  readonly tunnelUrl: string;
 }
 
 /** Relay -> client half. Session refused; the socket closes after this. */
@@ -103,6 +114,17 @@ export interface RelayOpenStreamMessage extends MessageBase {
    * instance half turns this into `x-forwarded-for` itself.
    */
   readonly clientIp: string | null;
+  /**
+   * Length of the request body, or null when the browser framed it as chunked.
+   *
+   * This exists so the instance half never has to guess at framing. The dialer is
+   * the authority for the request it builds toward the local app, and it cannot
+   * derive a length without buffering an arbitrarily large upload in memory.
+   * `content-length` is refused as a relayed header precisely because a peer
+   * must not dictate framing, so the length arrives here as a validated integer
+   * instead. Null means "chunked", and the dialer re-frames as chunked.
+   */
+  readonly contentLength: number | null;
 }
 
 /** Client half -> relay. This stream will not be served. */

@@ -12,7 +12,15 @@
  * here and implements the same codec against it.
  */
 export {
+  isRelayTunnelError,
+  openTunnelSocket,
+  type OpenTunnelSocketInput,
+  type RelayTunnelSocket,
+  RelayTunnelError,
+} from "./tunnel/tunnel-socket.js";
+export {
   type RelayStreamByteCounts,
+  readRawResponseHead,
   serveRelayHttpStream,
   type ServeRelayHttpStreamInput,
 } from "./tunnel/local-request.js";

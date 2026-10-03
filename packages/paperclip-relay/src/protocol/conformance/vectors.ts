@@ -171,7 +171,7 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
   // --- accepted: relay -> client half -------------------------------------
   {
     name: "hello ok",
-    body: `{"v":1,"type":"hello_ok","protocolVersion":1,"sessionId":"sess-1","heartbeatIntervalMs":15000,"maxConcurrentStreams":8,"capabilities":["http","websocket"]}\n`,
+    body: `{"v":1,"type":"hello_ok","protocolVersion":1,"sessionId":"sess-1","heartbeatIntervalMs":15000,"maxConcurrentStreams":8,"capabilities":["http","websocket"],"tunnelUrl":"wss://relay.example.com/tunnel"}\n`,
     expectMessage: {
       v: 1,
       type: "hello_ok",
@@ -180,6 +180,7 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
       heartbeatIntervalMs: 15000,
       maxConcurrentStreams: 8,
       capabilities: ["http", "websocket"],
+      tunnelUrl: "wss://relay.example.com/tunnel",
     },
   },
   {
@@ -194,7 +195,7 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
   },
   {
     name: "open stream for a websocket carrying the subscriber's own session",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"websocket","method":"GET","path":"/api/realtime/live-events?companyId=c-1","headers":{"authorization":"Bearer pcp_board_x","cookie":"paperclip-x.session_token=abc","sec-websocket-version":"13"},"clientIp":"203.0.113.7"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"websocket","method":"GET","path":"/api/realtime/live-events?companyId=c-1","headers":{"authorization":"Bearer pcp_board_x","cookie":"paperclip-x.session_token=abc","sec-websocket-version":"13"},"clientIp":"203.0.113.7","contentLength":null}\n`,
     expectMessage: {
       v: 1,
       type: "open_stream",
@@ -208,12 +209,13 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
         cookie: "paperclip-x.session_token=abc",
         "sec-websocket-version": "13",
       },
-      clientIp: "203.0.113.7",
+clientIp: "203.0.113.7",
+      contentLength: null,
     },
   },
   {
     name: "open stream for a POST body",
-    body: `{"v":1,"type":"open_stream","streamId":"s-2","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"content-type":"application/json"},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-2","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"content-type":"application/json"},"clientIp":null,"contentLength":null}\n`,
     expectMessage: {
       v: 1,
       type: "open_stream",
@@ -224,18 +226,19 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
       path: "/api/issues",
       headers: { "content-type": "application/json" },
       clientIp: null,
+      contentLength: null,
     },
   },
   {
     name: "open stream naming an actor is refused as an unknown field",
     // The relay must not be able to say who a stream acts as. If this ever
     // decodes, the no-escalation property of the design has been lost.
-    body: `{"v":1,"type":"open_stream","streamId":"s-3","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":null,"actorUserId":"usr_01H"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-3","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":null,"actorUserId":"usr_01H","contentLength":null}\n`,
     expectCode: "unknown_field",
   },
   {
     name: "open stream carrying an IPv6 client address",
-    body: `{"v":1,"type":"open_stream","streamId":"s-4","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":"2001:db8::1"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-4","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":"2001:db8::1","contentLength":null}\n`,
     expectMessage: {
       v: 1,
       type: "open_stream",
@@ -246,18 +249,19 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
       path: "/",
       headers: {},
       clientIp: "2001:db8::1",
+      contentLength: null,
     },
   },
   {
     name: "client address that is not an IP literal",
-    body: `{"v":1,"type":"open_stream","streamId":"s-5","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":"not-an-ip"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-5","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":"not-an-ip","contentLength":null}\n`,
     expectCode: "invalid_field",
   },
   {
     name: "client address carrying a port",
     // A host:port pair would need splitting before it could go into
     // x-forwarded-for, and guessing at the split is how an address gets forged.
-    body: `{"v":1,"type":"open_stream","streamId":"s-5","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":"203.0.113.7:443"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-5","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":"203.0.113.7:443","contentLength":null}\n`,
     expectCode: "invalid_field",
   },
   {
@@ -265,7 +269,7 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
     // Valid, and forwarded as-is. Normalising it to the IPv4 form here would mean
     // re-parsing an address the platform already parsed, and the mapped form is
     // what a dual-stack listener actually observes.
-    body: `{"v":1,"type":"open_stream","streamId":"s-5","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":"::ffff:203.0.113.7"}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-5","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":"::ffff:203.0.113.7","contentLength":null}\n`,
     expectMessage: {
       v: 1,
       type: "open_stream",
@@ -276,11 +280,76 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
       path: "/",
       headers: {},
       clientIp: "::ffff:203.0.113.7",
+      contentLength: null,
     },
   },
   {
     name: "client address of the wrong type",
-    body: `{"v":1,"type":"open_stream","streamId":"s-5","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":12345}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-5","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{},"clientIp":12345,"contentLength":null}\n`,
+    expectCode: "invalid_field",
+  },
+  {
+    name: "open stream with a declared body length",
+    body: `{"v":1,"type":"open_stream","streamId":"s-6","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"content-type":"application/json"},"clientIp":"203.0.113.7","contentLength":4096}\n`,
+    expectMessage: {
+      v: 1,
+      type: "open_stream",
+      streamId: "s-6",
+      streamNonce: NONCE,
+      kind: "http",
+      method: "POST",
+      path: "/api/issues",
+      headers: { "content-type": "application/json" },
+      clientIp: "203.0.113.7",
+      contentLength: 4096,
+    },
+  },
+  {
+    name: "open stream with a zero body length",
+    body: `{"v":1,"type":"open_stream","streamId":"s-7","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{},"clientIp":null,"contentLength":0}\n`,
+    expectMessage: {
+      v: 1,
+      type: "open_stream",
+      streamId: "s-7",
+      streamNonce: NONCE,
+      kind: "http",
+      method: "POST",
+      path: "/api/issues",
+      headers: {},
+      clientIp: null,
+      contentLength: 0,
+    },
+  },
+  {
+    name: "negative body length",
+    body: `{"v":1,"type":"open_stream","streamId":"s-8","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{},"clientIp":null,"contentLength":-1}\n`,
+    expectCode: "invalid_field",
+  },
+  {
+    name: "body length of the wrong type",
+    body: `{"v":1,"type":"open_stream","streamId":"s-8","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{},"clientIp":null,"contentLength":"4096"}\n`,
+    expectCode: "invalid_field",
+  },
+  {
+    name: "body length above the size cap",
+    // The length decides how many bytes the instance half will read, so an
+    // unvalidated value would be a way to make it wait on a body that never comes.
+    body: `{"v":1,"type":"open_stream","streamId":"s-8","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{},"clientIp":null,"contentLength":999999999999}\n`,
+    expectCode: "invalid_field",
+  },
+  {
+    name: "hello ok with a tunnel URL on another scheme",
+    body: `{"v":1,"type":"hello_ok","protocolVersion":1,"sessionId":"sess-1","heartbeatIntervalMs":15000,"maxConcurrentStreams":8,"capabilities":["http"],"tunnelUrl":"https://relay.example.com/tunnel"}\n`,
+    expectCode: "invalid_field",
+  },
+  {
+    name: "hello ok with a tunnel URL carrying credentials",
+    body: `{"v":1,"type":"hello_ok","protocolVersion":1,"sessionId":"sess-1","heartbeatIntervalMs":15000,"maxConcurrentStreams":8,"capabilities":["http"],"tunnelUrl":"wss://user:pass@relay.example.com/tunnel"}\n`,
+    expectCode: "invalid_field",
+  },
+  {
+    name: "hello ok without a tunnel URL",
+    body: `{"v":1,"type":"hello_ok","protocolVersion":1,"sessionId":"sess-1","heartbeatIntervalMs":15000,"maxConcurrentStreams":8,"capabilities":["http"]}\n`,
     expectCode: "invalid_field",
   },
   {
@@ -397,84 +466,84 @@ export const RELAY_DECODE_VECTORS: readonly RelayDecodeVector[] = [
   // --- rejected: smuggling surface ----------------------------------------
   {
     name: "relayed host header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"host":"evil.example.com"},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"host":"evil.example.com"},"clientIp":null,"contentLength":null}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "relayed content-length header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"content-length":"4"},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"content-length":"4"},"clientIp":null,"contentLength":null}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "relayed transfer-encoding header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"transfer-encoding":"chunked"},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"POST","path":"/api/issues","headers":{"transfer-encoding":"chunked"},"clientIp":null,"contentLength":null}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "relayed x-forwarded-for header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-forwarded-for":"10.0.0.1"},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-forwarded-for":"10.0.0.1"},"clientIp":null,"contentLength":null}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "relayed upgrade header",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"websocket","method":"GET","path":"/ws","headers":{"upgrade":"websocket"},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"websocket","method":"GET","path":"/ws","headers":{"upgrade":"websocket"},"clientIp":null,"contentLength":null}\n`,
     expectCode: "forbidden_header",
   },
   {
     name: "header value carrying CRLF",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-note":"a\\r\\nX-Injected: yes"},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-note":"a\\r\\nX-Injected: yes"},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_header_value",
   },
   {
     name: "header value carrying a bare NUL",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-note":"a\\u0000b"},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"x-note":"a\\u0000b"},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_header_value",
   },
   {
     name: "uppercase header name",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"X-Note":"a"},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":{"X-Note":"a"},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_header_name",
   },
   {
     name: "header map sent as an array",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":[["a","b"]],"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/","headers":[["a","b"]],"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_field",
   },
   {
     name: "path that is not origin-form",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"api/issues","headers":{},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"api/issues","headers":{},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_path",
   },
   {
     name: "path beginning with double slash",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"//evil.example.com/x","headers":{},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"//evil.example.com/x","headers":{},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_path",
   },
   {
     name: "path carrying a control character",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/a\\u0007b","headers":{},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"GET","path":"/a\\u0007b","headers":{},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_path",
   },
   {
     name: "unsupported HTTP method",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"TRACE","path":"/","headers":{},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"TRACE","path":"/","headers":{},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_method",
   },
   {
     name: "lowercase HTTP method",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"get","path":"/","headers":{},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${NONCE}","kind":"http","method":"get","path":"/","headers":{},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_method",
   },
 
   // --- rejected: stream identity -----------------------------------------
   {
     name: "stream nonce of the wrong length",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"AAAA","kind":"http","method":"get","path":"/","headers":{},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"AAAA","kind":"http","method":"get","path":"/","headers":{},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_field",
   },
   {
     name: "stream nonce that is not base64url",
-    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${"A".repeat(42)}+","kind":"http","method":"get","path":"/","headers":{},"clientIp":null}\n`,
+    body: `{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"${"A".repeat(42)}+","kind":"http","method":"get","path":"/","headers":{},"clientIp":null,"contentLength":null}\n`,
     expectCode: "invalid_field",
   },
   {

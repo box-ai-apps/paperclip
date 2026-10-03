@@ -106,6 +106,19 @@ export function serveRelayHttpStream(input: ServeRelayHttpStreamInput): void {
 
   const outgoing: OutgoingHttpHeaders = { ...headers, host: input.localAuthority };
 
+  // Framing is declared, never inferred. `content-length` is refused as a relayed
+  // header precisely because a peer must not dictate framing, so the length
+  // arrives as a validated integer on `open_stream`. When it is null the browser
+  // framed the body as chunked, the relay handed us de-chunked bytes, and we
+  // re-frame as chunked ourselves rather than buffering an arbitrarily large
+  // upload to discover a length we were already told.
+  const framedLength = input.request.contentLength;
+  if (framedLength === null || framedLength === undefined) {
+    outgoing["transfer-encoding"] = "chunked";
+  } else {
+    outgoing["content-length"] = String(framedLength);
+  }
+
   let localRequest: ClientRequest;
   try {
     localRequest = createRequest(
@@ -183,5 +196,108 @@ export function serveRelayHttpStream(input: ServeRelayHttpStreamInput): void {
   input.body.pipe(localRequest);
   input.body.on("end", () => {
     localRequest.end();
+  });
+}
+
+/**
+ * Read the status line and headers a local app wrote onto a raw socket.
+ *
+ * Used for the WebSocket path, where the dialer must hand back the app's own `101`
+ * response rather than a synthesised one. The app computes `Sec-WebSocket-Accept`
+ * from the key in the browser's upgrade request, so the response cannot be
+ * regenerated locally — it has to be the bytes the app actually produced.
+ *
+ * Hop-by-hop headers are stripped for the same reason as on the HTTP path.
+ */
+export async function readRawResponseHead(
+  socket: Readable,
+  options: { readonly maxHeadBytes?: number; readonly deadlineMs?: number },
+): Promise<{ status: number; headers: Record<string, string> }> {
+  const maxHeadBytes = options.maxHeadBytes ?? 16 * 1024;
+  const deadlineMs = options.deadlineMs ?? 30_000;
+
+  return await new Promise((resolve, reject) => {
+    let buffered = Buffer.alloc(0);
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      finishError(new Error(`the local app sent no response head within ${deadlineMs}ms`));
+    }, deadlineMs);
+    timer.unref?.();
+
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      socket.off("data", onData);
+      socket.off("end", onEnd);
+      socket.off("error", onError);
+    };
+
+    const finish = (
+      value: { status: number; headers: Record<string, string> },
+      rest: Buffer,
+    ): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      // Anything already read past the head must go back on the stream, or the
+      // first bytes of a WebSocket frame would be dropped. `unshift` puts them
+      // ahead of whatever a later `pipe` will read.
+      if (rest.byteLength > 0) socket.unshift(rest);
+      resolve(value);
+    };
+
+    const finishError = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    const onData = (chunk: Buffer): void => {
+      buffered = Buffer.concat([buffered, chunk]);
+      if (buffered.byteLength > maxHeadBytes) {
+        finishError(new Error("the local app's response head exceeded the byte cap"));
+        return;
+      }
+      const separator = buffered.indexOf("\r\n\r\n");
+      if (separator === -1) return;
+
+      const head = buffered.subarray(0, separator).toString("latin1");
+      const rest = buffered.subarray(separator + 4);
+      const lines = head.split("\r\n");
+      const statusLine = lines[0] ?? "";
+      const match = /^HTTP\/1\.[01] (\d{3})(?: (.*))?$/.exec(statusLine);
+      if (!match) {
+        finishError(new Error("the local app sent a malformed status line"));
+        return;
+      }
+
+      const headers: Record<string, string> = {};
+      for (const line of lines.slice(1)) {
+        const colon = line.indexOf(":");
+        if (colon === -1) continue;
+        const name = line.slice(0, colon).trim().toLowerCase();
+        const value = line.slice(colon + 1).trim();
+        if (name === "" || value === "") continue;
+        if (STRIPPED_RESPONSE_HEADERS.has(name)) continue;
+        headers[name] = Object.hasOwn(headers, name)
+          ? `${headers[name]}, ${value}`
+          : value;
+      }
+
+      finish({ status: Number(match[1]), headers }, rest);
+    };
+
+    const onEnd = (): void => {
+      finishError(new Error("the local app closed before sending a response head"));
+    };
+
+    const onError = (error: Error): void => {
+      finishError(error);
+    };
+
+    socket.on("data", onData);
+    socket.on("end", onEnd);
+    socket.on("error", onError);
   });
 }

@@ -125,6 +125,7 @@ const HELLO_OK: RelayMessage = {
   heartbeatIntervalMs: 1_000,
   maxConcurrentStreams: 32,
   capabilities: ["http", "websocket"],
+  tunnelUrl: "wss://relay.example.com/tunnel",
 };
 
 const OPEN_STREAM: RelayMessage = {
@@ -137,6 +138,7 @@ const OPEN_STREAM: RelayMessage = {
   path: "/api/health",
   headers: { cookie: "paperclip-x.session_token=abc" },
   clientIp: "203.0.113.7",
+  contentLength: null,
 };
 
 /** Connect and complete the handshake, leaving the dialer in `ready`. */
@@ -207,6 +209,7 @@ describe("RelayDialer handshake", () => {
       protocolVersion: 1,
       // The relay offered 32; our local ceiling of 8 wins.
       maxConcurrentStreams: 8,
+      tunnelUrl: "wss://relay.example.com/tunnel",
     });
     expect(harness.dialer.currentState).toBe("ready");
     expect(harness.dialer.protocolVersion).toBe(1);
@@ -321,6 +324,66 @@ describe("RelayDialer permanent refusal", () => {
       message: expect.stringContaining("99"),
       permanent: true,
     });
+    expect(harness.dialer.currentState).toBe("stopped");
+  });
+
+  it("accepts a tunnel URL on the same origin as the control socket", async () => {
+    const harness = createHarness();
+    await reachReady(harness);
+    expect(harness.events).toContainEqual({
+      type: "ready",
+      sessionId: "sess-1",
+      protocolVersion: 1,
+      maxConcurrentStreams: 8,
+      tunnelUrl: "wss://relay.example.com/tunnel",
+    });
+  });
+
+  it("treats an explicit default port as the same origin", async () => {
+    // A relay sending a fully-specified URL must not be rejected for it, or
+    // callers get tempted to loosen the check to make it fit.
+    const harness = createHarness();
+    harness.dialer.start();
+    await vi.waitFor(() => expect(harness.sockets).toHaveLength(1));
+    harness.latest().emitOpen();
+    harness.latest().emitMessage({
+      ...HELLO_OK,
+      tunnelUrl: "wss://relay.example.com:443/tunnel",
+    } as RelayMessage);
+    expect(harness.dialer.currentState).toBe("ready");
+  });
+
+  it("refuses a tunnel URL on a different host", async () => {
+    // A relay that could redirect streams elsewhere could read every byte a
+    // subscriber sent. Falling back to a local tunnel URL would silently keep
+    // publishing after the relay changed, so the whole session is refused.
+    const harness = createHarness();
+    harness.dialer.start();
+    await vi.waitFor(() => expect(harness.sockets).toHaveLength(1));
+    harness.latest().emitOpen();
+    harness.latest().emitMessage({
+      ...HELLO_OK,
+      tunnelUrl: "wss://evil.example.net/tunnel",
+    } as RelayMessage);
+
+    expect(harness.events).toContainEqual({
+      type: "refused",
+      code: "internal_error",
+      message: expect.stringContaining("different origin"),
+      permanent: true,
+    });
+    expect(harness.dialer.currentState).toBe("stopped");
+  });
+
+  it("refuses a tunnel URL that downgrades to plain ws", async () => {
+    const harness = createHarness();
+    harness.dialer.start();
+    await vi.waitFor(() => expect(harness.sockets).toHaveLength(1));
+    harness.latest().emitOpen();
+    harness.latest().emitMessage({
+      ...HELLO_OK,
+      tunnelUrl: "ws://relay.example.com/tunnel",
+    } as RelayMessage);
     expect(harness.dialer.currentState).toBe("stopped");
   });
 
@@ -481,6 +544,7 @@ describe("RelayDialer stream dispatch", () => {
         path: "/api/health",
         headers: { cookie: "paperclip-x.session_token=abc" },
         clientIp: "203.0.113.7",
+        contentLength: null,
       },
     });
   });
@@ -492,6 +556,26 @@ describe("RelayDialer stream dispatch", () => {
 
     const event = harness.events.find((candidate) => candidate.type === "open_stream");
     expect(event && "request" in event && event.request).not.toHaveProperty("actorUserId");
+  });
+
+  it("carries the declared body length so framing is never guessed", async () => {
+    const harness = createHarness();
+    await reachReady(harness);
+    harness.latest().emitMessage({
+      v: 1,
+      type: "open_stream",
+      streamId: "s-2",
+      streamNonce: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      kind: "http",
+      method: "POST",
+      path: "/api/issues",
+      headers: {},
+      clientIp: null,
+      contentLength: 4096,
+    });
+
+    const event = harness.events.find((candidate) => candidate.type === "open_stream");
+    expect(event && "request" in event && event.request.contentLength).toBe(4096);
   });
 
   it("sends a rejection when the dialer declines a stream", async () => {

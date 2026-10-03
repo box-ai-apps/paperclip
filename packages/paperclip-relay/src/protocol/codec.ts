@@ -55,6 +55,7 @@ function orderFields(message: RelayMessage): Record<string, unknown> {
       out.heartbeatIntervalMs = message.heartbeatIntervalMs;
       out.maxConcurrentStreams = message.maxConcurrentStreams;
       out.capabilities = message.capabilities;
+      out.tunnelUrl = message.tunnelUrl;
       return out;
     case "hello_reject":
       out.code = message.code;
@@ -71,6 +72,7 @@ function orderFields(message: RelayMessage): Record<string, unknown> {
       out.path = message.path;
       out.headers = message.headers;
       out.clientIp = message.clientIp;
+      out.contentLength = message.contentLength;
       return out;
     case "stream_reject":
       out.streamId = message.streamId;

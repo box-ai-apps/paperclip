@@ -34,6 +34,7 @@ import {
   SUPPORTED_PROTOCOL_VERSIONS,
   negotiateProtocolVersion,
 } from "../protocol/version.js";
+import { isSameOriginTunnelUrl } from "../protocol/validate.js";
 import {
   createBackoffSequence,
   isPermanentRelayError,
@@ -74,6 +75,8 @@ export interface RelayStreamRequest {
   readonly headers: Readonly<Record<string, string>>;
   /** Address the relay observed for the client, or null when it could not tell. */
   readonly clientIp: string | null;
+  /** Declared body length, or null when the body is chunked. */
+  readonly contentLength: number | null;
 }
 
 export type RelayStreamDecision =
@@ -95,6 +98,8 @@ export type RelayDialerEvent =
       readonly sessionId: string;
       readonly protocolVersion: number;
       readonly maxConcurrentStreams: number;
+      /** Where to open per-stream tunnel sockets, already checked same-origin. */
+      readonly tunnelUrl: string;
     }
   | {
       readonly type: "refused";
@@ -484,6 +489,19 @@ export class RelayDialer {
     this.backoff.reset();
     this.startHeartbeatLoop();
 
+    // A relay that could point tunnel sockets at another host could read every
+    // byte a subscriber sent. Refusing the whole session is the right response:
+    // the alternative, falling back to a locally configured tunnel URL, would
+    // silently keep publishing after the relay changed.
+    if (!isSameOriginTunnelUrl(this.url, message.tunnelUrl)) {
+      this.endSession(
+        "internal_error",
+        `the relay asked for tunnel sockets on a different origin (${safeOrigin(message.tunnelUrl)}) than the control socket (${safeOrigin(this.url)}); refusing the session`,
+        true,
+      );
+      return false;
+    }
+
     this.emit({
       type: "ready",
       sessionId: message.sessionId,
@@ -491,6 +509,7 @@ export class RelayDialer {
       // The local ceiling is a floor on our own caution: a relay cannot talk
       // this dialer into serving more streams than it is willing to.
       maxConcurrentStreams: Math.min(message.maxConcurrentStreams, this.localStreamCeiling),
+      tunnelUrl: message.tunnelUrl,
     });
     return true;
   }
@@ -695,11 +714,26 @@ function toStreamRequest(message: RelayOpenStreamMessage): RelayStreamRequest {
     path: message.path,
     headers: message.headers,
     clientIp: message.clientIp,
+    contentLength: message.contentLength,
   };
 }
 
 function describe(message: string, cause: unknown): string {
   return cause instanceof Error ? `${message}: ${cause.message}` : message;
+}
+
+/**
+ * Reduce a URL to scheme and host for an error message.
+ *
+ * Strips the path and query, which can carry routing detail or a stream nonce.
+ */
+function safeOrigin(raw: string): string {
+  try {
+    const url = new URL(raw);
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return "an unparseable URL";
+  }
 }
 
 export { redactRelayCredential };

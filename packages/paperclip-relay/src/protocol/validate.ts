@@ -170,6 +170,86 @@ export function assertClientIp(value: unknown): string | null {
   return value;
 }
 
+/**
+ * Validate a `ws:`/`wss:` URL used for a socket we will open.
+ *
+ * Only the two WebSocket schemes, and no embedded credentials — a URL that
+ * carries its own secret ends up in log lines and crash reports. Whether the
+ * URL is *the same origin* as the control socket is a policy question the dialer
+ * answers with {@link isSameOriginTunnelUrl}, because only it knows the control
+ * URL it connected to.
+ */
+export function assertWebSocketUrl(value: unknown): string {
+  if (typeof value !== "string" || value.length > 2048) {
+    throw new RelayProtocolError("invalid_field", "expected a ws: or wss: URL");
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new RelayProtocolError("invalid_field", "tunnelUrl is not a valid URL");
+  }
+  if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+    throw new RelayProtocolError("invalid_field", "tunnelUrl must use ws: or wss:");
+  }
+  if (url.username !== "" || url.password !== "") {
+    throw new RelayProtocolError("invalid_field", "tunnelUrl must not embed credentials");
+  }
+  return url.toString();
+}
+
+/**
+ * True when a tunnel URL is the same origin as the control URL.
+ *
+ * Compared on scheme, host, and effective port. `wss:` on 443 and `wss:` with an
+ * explicit `:443` are the same origin, so the default port is filled in before
+ * comparing — otherwise a relay sending a fully-specified URL would be rejected
+ * for no reason, and callers would be tempted to loosen the check to make it fit.
+ */
+export function isSameOriginTunnelUrl(controlUrl: string, tunnelUrl: string): boolean {
+  let control: URL;
+  let tunnel: URL;
+  try {
+    control = new URL(controlUrl);
+    tunnel = new URL(tunnelUrl);
+  } catch {
+    return false;
+  }
+  return (
+    control.protocol === tunnel.protocol
+    && control.hostname === tunnel.hostname
+    && effectivePort(control) === effectivePort(tunnel)
+  );
+}
+
+function effectivePort(url: URL): string {
+  if (url.port !== "") return url.port;
+  return url.protocol === "wss:" || url.protocol === "https:" ? "443" : "80";
+}
+
+/**
+ * Validate a body length, or null for "chunked".
+ *
+ * Bounded well below anything a real request needs, because this number decides
+ * how many bytes the instance half will read. An unvalidated value here would be
+ * a way to make the dialer wait on a body that never arrives.
+ */
+export const MAX_RELAY_BODY_LENGTH = 512 * 1024 * 1024;
+
+export function assertContentLength(value: unknown): number | null {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new RelayProtocolError(
+      "invalid_field",
+      "contentLength must be a non-negative safe integer or null",
+    );
+  }
+  if (value > MAX_RELAY_BODY_LENGTH) {
+    throw new RelayProtocolError("invalid_field", "contentLength exceeds the size cap");
+  }
+  return value;
+}
+
 export function assertProtocolVersionField(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
     throw new RelayProtocolError("unsupported_protocol_version", "v must be a positive safe integer");

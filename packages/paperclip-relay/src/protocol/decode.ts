@@ -29,7 +29,8 @@ import {
   MAX_CONTROL_FRAME_BYTES,
   assertCapabilityList,
   assertClientIp,
-  assertRequestHeaderMap,
+  assertContentLength,
+assertRequestHeaderMap,
   assertResponseHeaderMap,
   assertHttpStatus,
   assertInstanceSlug,
@@ -46,6 +47,7 @@ import {
   assertStreamId,
   assertStreamKind,
   assertStreamNonce,
+assertWebSocketUrl,
 } from "./validate.js";
 
 /**
@@ -58,10 +60,10 @@ import {
  */
 const ALLOWED_FIELDS: Readonly<Record<RelayMessageType, readonly string[]>> = {
   hello: ["v", "type", "supportedProtocolVersions", "instanceSlug", "paperclipVersion", "capabilities"],
-  hello_ok: ["v", "type", "protocolVersion", "sessionId", "heartbeatIntervalMs", "maxConcurrentStreams", "capabilities"],
+  hello_ok: ["v", "type", "protocolVersion", "sessionId", "heartbeatIntervalMs", "maxConcurrentStreams", "capabilities", "tunnelUrl"],
   hello_reject: ["v", "type", "code", "message"],
   heartbeat: ["v", "type", "seq"],
-  open_stream: ["v", "type", "streamId", "streamNonce", "kind", "method", "path", "headers", "clientIp"],
+  open_stream: ["v", "type", "streamId", "streamNonce", "kind", "method", "path", "headers", "clientIp", "contentLength"],
   stream_reject: ["v", "type", "streamId", "code", "message"],
   close_stream: ["v", "type", "streamId", "code"],
   response_head: ["v", "type", "streamId", "status", "headers"],
@@ -194,6 +196,7 @@ function decodeHelloOk(obj: Record<string, unknown>, v: number): RelayHelloOkMes
     heartbeatIntervalMs: assertPositiveInteger(obj.heartbeatIntervalMs),
     maxConcurrentStreams: assertPositiveInteger(obj.maxConcurrentStreams),
     capabilities: assertCapabilityList(obj.capabilities),
+    tunnelUrl: assertWebSocketUrl(obj.tunnelUrl),
   };
 }
 
@@ -218,6 +221,7 @@ function decodeOpenStream(obj: Record<string, unknown>, v: number): RelayOpenStr
     path: assertOriginFormPath(obj.path),
     headers,
     clientIp: assertClientIp(obj.clientIp),
+    contentLength: assertContentLength(obj.contentLength),
   };
 }
 

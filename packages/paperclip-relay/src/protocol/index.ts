@@ -39,6 +39,7 @@ export {
 } from "./messages.js";
 export {
   assertClientIp,
+  assertContentLength,
   assertHeaderName,
   assertHeaderValue,
   assertRequestHeaderMap,
@@ -48,13 +49,16 @@ export {
   assertOriginFormPath,
   assertStreamId,
   assertStreamNonce,
+  assertWebSocketUrl,
   FORBIDDEN_RELAY_HEADERS,
   isInstanceSlug,
+  isSameOriginTunnelUrl,
   MAX_CONTROL_FRAME_BYTES,
   MAX_HEADER_BLOCK_BYTES,
   MAX_HEADER_COUNT,
   MAX_HEADER_LINE_BYTES,
   MAX_PATH_LENGTH,
+  MAX_RELAY_BODY_LENGTH,
   SUPPORTED_METHODS,
 } from "./validate.js";
 export {
