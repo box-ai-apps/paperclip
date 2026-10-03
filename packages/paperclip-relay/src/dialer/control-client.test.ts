@@ -136,6 +136,7 @@ const OPEN_STREAM: RelayMessage = {
   method: "GET",
   path: "/api/health",
   headers: { cookie: "paperclip-x.session_token=abc" },
+  clientIp: "203.0.113.7",
 };
 
 /** Connect and complete the handshake, leaving the dialer in `ready`. */
@@ -479,6 +480,7 @@ describe("RelayDialer stream dispatch", () => {
         method: "GET",
         path: "/api/health",
         headers: { cookie: "paperclip-x.session_token=abc" },
+        clientIp: "203.0.113.7",
       },
     });
   });
@@ -626,12 +628,12 @@ describe("RelayDialer hostile input", () => {
     const harness = createHarness();
     await reachReady(harness);
     harness.latest().emitRaw(
-      '{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","kind":"http","method":"GET","path":"/a","headers":{},"actorUserId":"x"}\n',
+      '{"v":1,"type":"open_stream","streamId":"s-1","streamNonce":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","kind":"http","method":"GET","path":"/a","headers":{},"clientIp":null,"actorUserId":"x"}\n',
     );
     // The first frame is rejected outright, so the second must never be acted
     // on even though it is valid.
     harness.latest().emitRaw(
-      '{"v":1,"type":"open_stream","streamId":"s-2","streamNonce":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","kind":"http","method":"GET","path":"/b","headers":{}}\n',
+      '{"v":1,"type":"open_stream","streamId":"s-2","streamNonce":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","kind":"http","method":"GET","path":"/b","headers":{},"clientIp":null}\n',
     );
 
     expect(harness.events.some((event) => event.type === "open_stream")).toBe(false);

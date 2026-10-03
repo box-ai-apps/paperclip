@@ -38,10 +38,11 @@ export {
   type RelayStreamRejectMessage,
 } from "./messages.js";
 export {
-  assertActorUserId,
-  assertHeaderMap,
+  assertClientIp,
   assertHeaderName,
   assertHeaderValue,
+  assertRequestHeaderMap,
+  assertResponseHeaderMap,
   assertInstanceSlug,
   assertMethod,
   assertOriginFormPath,

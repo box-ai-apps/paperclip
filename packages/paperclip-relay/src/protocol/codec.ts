@@ -70,6 +70,7 @@ function orderFields(message: RelayMessage): Record<string, unknown> {
       out.method = message.method;
       out.path = message.path;
       out.headers = message.headers;
+      out.clientIp = message.clientIp;
       return out;
     case "stream_reject":
       out.streamId = message.streamId;

@@ -94,6 +94,15 @@ export interface RelayOpenStreamMessage extends MessageBase {
   readonly method: string;
   readonly path: string;
   readonly headers: Record<string, string>;
+  /**
+   * Address the relay observed for the client, or null when it could not tell.
+   *
+   * A first-class field rather than a relayed header, so it cannot be confused
+   * with one the client supplied — forging an address in the instance's audit
+   * trail is exactly what the request-header denylist exists to prevent. The
+   * instance half turns this into `x-forwarded-for` itself.
+   */
+  readonly clientIp: string | null;
 }
 
 /** Client half -> relay. This stream will not be served. */

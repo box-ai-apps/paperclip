@@ -28,7 +28,9 @@ import { DuplicateJsonKeyError, parseJsonNoDuplicateKeys } from "./strict-json.j
 import {
   MAX_CONTROL_FRAME_BYTES,
   assertCapabilityList,
-  assertHeaderMap,
+  assertClientIp,
+  assertRequestHeaderMap,
+  assertResponseHeaderMap,
   assertHttpStatus,
   assertInstanceSlug,
   assertMethod,
@@ -59,7 +61,7 @@ const ALLOWED_FIELDS: Readonly<Record<RelayMessageType, readonly string[]>> = {
   hello_ok: ["v", "type", "protocolVersion", "sessionId", "heartbeatIntervalMs", "maxConcurrentStreams", "capabilities"],
   hello_reject: ["v", "type", "code", "message"],
   heartbeat: ["v", "type", "seq"],
-  open_stream: ["v", "type", "streamId", "streamNonce", "kind", "method", "path", "headers"],
+  open_stream: ["v", "type", "streamId", "streamNonce", "kind", "method", "path", "headers", "clientIp"],
   stream_reject: ["v", "type", "streamId", "code", "message"],
   close_stream: ["v", "type", "streamId", "code"],
   response_head: ["v", "type", "streamId", "status", "headers"],
@@ -144,7 +146,7 @@ export function decodeRelayMessage(
         code: obj.code === null ? null : assertRelayErrorCode(obj.code),
       };
     case "response_head": {
-      const { headers } = assertHeaderMap(obj.headers);
+      const { headers } = assertResponseHeaderMap(obj.headers);
       return {
         v: version,
         type: "response_head",
@@ -205,7 +207,7 @@ function decodeHelloReject(obj: Record<string, unknown>, v: number): RelayHelloR
 }
 
 function decodeOpenStream(obj: Record<string, unknown>, v: number): RelayOpenStreamMessage {
-  const { headers } = assertHeaderMap(obj.headers);
+  const { headers } = assertRequestHeaderMap(obj.headers);
   return {
     v,
     type: "open_stream",
@@ -215,6 +217,7 @@ function decodeOpenStream(obj: Record<string, unknown>, v: number): RelayOpenStr
     method: assertMethod(obj.method),
     path: assertOriginFormPath(obj.path),
     headers,
+    clientIp: assertClientIp(obj.clientIp),
   };
 }
 

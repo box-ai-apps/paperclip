@@ -11,6 +11,8 @@
  * so an unchecked CR/LF in a header value is a request-smuggling primitive and
  * an unchecked name is a way to shadow a header the stream server owns.
  */
+import { isIP } from "node:net";
+
 import { RELAY_ERROR_CODES, type RelayErrorCode } from "./error-codes.js";
 import { RelayProtocolError } from "./errors.js";
 
@@ -104,9 +106,6 @@ export function isInstanceSlug(value: unknown): value is string {
   return typeof value === "string" && INSTANCE_SLUG_RE.test(value);
 }
 
-/** Printable, non-space ASCII. Local user ids are opaque to us. */
-const ACTOR_USER_ID_RE = /^[\x21-\x7e]{1,128}$/;
-
 /**
  * Length cap on free-form human-facing prose.
  *
@@ -139,6 +138,36 @@ function containsControlCharacter(value: string): boolean {
     if (code <= 0x1f || code === 0x7f) return true;
   }
   return false;
+}
+
+/**
+ * Validate the client address the relay observed.
+ *
+ * This is a first-class field rather than a relayed `x-forwarded-for` header for
+ * two reasons. A header is indistinguishable from one the end client supplied,
+ * so accepting it would let a client forge its own address in the instance's
+ * audit trail — the exact thing `FORBIDDEN_RELAY_HEADERS` exists to prevent. And
+ * an address is not prose: validating it against `node:net`'s `isIP` is exact and
+ * needs no hand-rolled parser, so there is no opportunity to disagree with the
+ * platform about what a valid address is.
+ *
+ * Null means "the relay could not determine it", which is a real state for a
+ * connection that arrived over a proxy the relay does not control. It is not the
+ * same as loopback and must not be reported as one.
+ */
+export function assertClientIp(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string") {
+    throw new RelayProtocolError("invalid_field", "clientIp must be a string or null");
+  }
+  if (value.length > 45) {
+    // 45 is the longest textual IPv6 address with an embedded IPv4 suffix.
+    throw new RelayProtocolError("invalid_field", "clientIp exceeds the length cap");
+  }
+  if (isIP(value) === 0) {
+    throw new RelayProtocolError("invalid_field", "clientIp must be a bare IPv4 or IPv6 literal");
+  }
+  return value;
 }
 
 export function assertProtocolVersionField(value: unknown): number {
@@ -195,17 +224,6 @@ export function assertInstanceSlug(value: unknown): string {
   return value;
 }
 
-export function assertActorUserId(value: unknown): string {
-  if (typeof value !== "string" || !ACTOR_USER_ID_RE.test(value)) {
-    throw new RelayProtocolError(
-      "invalid_field",
-      "actorUserId must be 1-128 printable non-space ASCII characters",
-    );
-  }
-  return value;
-}
-
-/** Free-form prose in `hello_reject` / `stream_reject`. Never parsed. */
 export function assertSafeMessage(value: unknown): string {
   if (typeof value !== "string" || value.length > MAX_MESSAGE_LENGTH) {
     throw new RelayProtocolError(
@@ -258,7 +276,18 @@ export function assertOriginFormPath(value: unknown): string {
   return value;
 }
 
-export function assertHeaderName(value: unknown): string {
+/**
+ * Validate a header *name* for a relayed request.
+ *
+ * {@link FORBIDDEN_RELAY_HEADERS} applies here and only here. A peer choosing a
+ * request's framing or its own apparent address is a request-smuggling and
+ * log-forging primitive, so those names are refused. The same names are
+ * legitimate in a response — a `101 Switching Protocols` is nothing without
+ * `Upgrade` and `Connection`, and the instance half is the authority on its own
+ * app's responses — which is why response headers go through
+ * {@link assertResponseHeaderMap} instead.
+ */
+export function assertRequestHeaderName(value: unknown): string {
   if (typeof value !== "string" || value.length === 0 || !HEADER_NAME_RE.test(value)) {
     throw new RelayProtocolError(
       "invalid_header_name",
@@ -269,6 +298,17 @@ export function assertHeaderName(value: unknown): string {
     throw new RelayProtocolError(
       "forbidden_header",
       `header ${value} is owned by the stream server and must not be relayed`,
+    );
+  }
+  return value;
+}
+
+/** Validate a header name in either direction. No denylist. */
+export function assertHeaderName(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0 || !HEADER_NAME_RE.test(value)) {
+    throw new RelayProtocolError(
+      "invalid_header_name",
+      "header name must be a lowercase RFC 7230 token",
     );
   }
   return value;
@@ -303,11 +343,10 @@ export interface ValidatedHeaderMap {
   readonly headers: Record<string, string>;
 }
 
-/**
- * Validate a complete header map: keys unique, lowercase, not owned by the
- * stream server; values transmittable; count and total size bounded.
- */
-export function assertHeaderMap(value: unknown): ValidatedHeaderMap {
+function validateHeaderMap(
+  value: unknown,
+  assertName: (name: unknown) => string,
+): ValidatedHeaderMap {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new RelayProtocolError("invalid_field", "headers must be a JSON object");
   }
@@ -319,7 +358,7 @@ export function assertHeaderMap(value: unknown): ValidatedHeaderMap {
   const headers: Record<string, string> = {};
   let totalBytes = 0;
   for (const [rawName, rawValue] of entries) {
-    const name = assertHeaderName(rawName);
+    const name = assertName(rawName);
     const headerValue = assertHeaderValue(name, rawValue);
     // A duplicate would already have been rejected by the strict JSON parser,
     // so this guards a caller that builds the map in-process instead.
@@ -333,6 +372,33 @@ export function assertHeaderMap(value: unknown): ValidatedHeaderMap {
     headers[name] = headerValue;
   }
   return { headers };
+}
+
+/**
+ * Validate headers on a relayed **request**.
+ *
+ * Keys must be unique, lowercase, transmittable, and not owned by the stream
+ * server; count and total size are bounded.
+ */
+export function assertRequestHeaderMap(value: unknown): ValidatedHeaderMap {
+  return validateHeaderMap(value, assertRequestHeaderName);
+}
+
+/**
+ * Validate headers on a **response** heading back through the tunnel.
+ *
+ * The {@link FORBIDDEN_RELAY_HEADERS} denylist is intentionally *not* applied
+ * here. Those names describe who owns framing and apparent address in a
+ * *request*; in a response they are the protocol speaking for itself. A
+ * `101 Switching Protocols` carries `Upgrade` and `Connection`, and a WebSocket
+ * handshake is only complete with `Sec-WebSocket-Accept` — forbidding them would
+ * make every relay connection to `/api/realtime/live-events` impossible.
+ *
+ * Control characters, header count, and byte caps still apply, because those
+ * protect the frame rather than express ownership.
+ */
+export function assertResponseHeaderMap(value: unknown): ValidatedHeaderMap {
+  return validateHeaderMap(value, assertHeaderName);
 }
 
 export function assertHttpStatus(value: unknown): number {

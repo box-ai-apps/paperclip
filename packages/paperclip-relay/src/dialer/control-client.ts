@@ -72,6 +72,8 @@ export interface RelayStreamRequest {
   readonly method: string;
   readonly path: string;
   readonly headers: Readonly<Record<string, string>>;
+  /** Address the relay observed for the client, or null when it could not tell. */
+  readonly clientIp: string | null;
 }
 
 export type RelayStreamDecision =
@@ -692,6 +694,7 @@ function toStreamRequest(message: RelayOpenStreamMessage): RelayStreamRequest {
     method: message.method,
     path: message.path,
     headers: message.headers,
+    clientIp: message.clientIp,
   };
 }
 
