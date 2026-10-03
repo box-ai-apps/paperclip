@@ -88,6 +88,17 @@ export interface RelayNormalizeOptions {
   readonly localOrigin: string;
   /** Address the relay observed, or null when it could not determine one. */
   readonly clientIp?: string | null;
+  /**
+   * Keep `Connection` and `Upgrade` from the relayed request.
+   *
+   * Required for the WebSocket path, and the reason the hop-by-hop strip cannot
+   * be unconditional. Those two headers *are* the protocol negotiation on an
+   * upgrade request: drop them and the local app sees an ordinary GET, answers
+   * `200`, and the browser reports a failed handshake with no indication that the
+   * relay was involved. Everywhere else they stay stripped, because a client that
+   * can set them can attempt a protocol switch the app never agreed to.
+   */
+  readonly preserveHandshakeHeaders?: boolean;
 }
 
 export interface NormalizedRelayRequest {
@@ -115,12 +126,20 @@ export function normalizeRelayedRequestHeaders(
   options: RelayNormalizeOptions,
 ): NormalizedRelayRequest {
   assertOriginMatchesAuthority(options.localOrigin, options.localAuthority);
+  const preserveHandshakeHeaders = options.preserveHandshakeHeaders ?? false;
 
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(relayed)) {
     const lower = name.toLowerCase();
-    if (HOP_BY_HOP_HEADERS.has(lower)) continue;
     if (AUTHORITY_HEADERS.has(lower)) continue;
+    if (HOP_BY_HOP_HEADERS.has(lower)) {
+      // On an upgrade request these two carry the protocol negotiation rather
+      // than describing a hop.
+      if (preserveHandshakeHeaders && (lower === "connection" || lower === "upgrade")) {
+        headers[lower] = value;
+      }
+      continue;
+    }
     headers[lower] = value;
   }
 

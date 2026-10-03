@@ -12,6 +12,11 @@
  * here and implements the same codec against it.
  */
 export {
+  type LocalConnector,
+  RelayStreamHandler,
+  type RelayStreamHandlerOptions,
+} from "./tunnel/stream-handler.js";
+export {
   isRelayTunnelError,
   openTunnelSocket,
   type OpenTunnelSocketInput,

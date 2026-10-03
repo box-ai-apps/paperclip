@@ -37,6 +37,24 @@ const STRIPPED_RESPONSE_HEADERS: ReadonlySet<string> = new Set([
   "upgrade",
 ]);
 
+/**
+ * Headers a `101 Switching Protocols` must keep.
+ *
+ * This is why the hop-by-hop strip cannot be unconditional on the WebSocket path.
+ * `Upgrade` and `Connection` are hop-by-hop for an ordinary exchange, but on a
+ * `101` they *are* the protocol negotiation — the browser rejects the handshake
+ * without them, and the whole point of the response is to convey them. The relay
+ * writes these headers to the browser verbatim, so dropping them here would drop
+ * them from the only place they exist.
+ */
+const HANDSHAKE_RESPONSE_HEADERS: ReadonlySet<string> = new Set([
+  "upgrade",
+  "connection",
+  "sec-websocket-accept",
+  "sec-websocket-protocol",
+  "sec-websocket-extensions",
+]);
+
 export interface RelayStreamByteCounts {
   /** Bytes read from the relayed client, i.e. the request body. */
   readonly bytesFromClient: number;
@@ -211,10 +229,26 @@ export function serveRelayHttpStream(input: ServeRelayHttpStreamInput): void {
  */
 export async function readRawResponseHead(
   socket: Readable,
-  options: { readonly maxHeadBytes?: number; readonly deadlineMs?: number },
+  options: {
+    readonly maxHeadBytes?: number;
+    readonly deadlineMs?: number;
+    /**
+     * Keep `Upgrade`/`Connection` and the `Sec-WebSocket-*` headers.
+     *
+     * Required for the WebSocket path. Off for anything else, where they are
+     * hop-by-hop and Node has already dealt with them.
+     */
+      readonly preserveHandshakeHeaders?: boolean;
+  },
 ): Promise<{ status: number; headers: Record<string, string> }> {
   const maxHeadBytes = options.maxHeadBytes ?? 16 * 1024;
   const deadlineMs = options.deadlineMs ?? 30_000;
+  const preserveHandshakeHeaders = options.preserveHandshakeHeaders ?? false;
+
+  const shouldStrip = (name: string): boolean => {
+    if (preserveHandshakeHeaders && HANDSHAKE_RESPONSE_HEADERS.has(name)) return false;
+    return STRIPPED_RESPONSE_HEADERS.has(name);
+  };
 
   return await new Promise((resolve, reject) => {
     let buffered = Buffer.alloc(0);
@@ -279,7 +313,7 @@ export async function readRawResponseHead(
         const name = line.slice(0, colon).trim().toLowerCase();
         const value = line.slice(colon + 1).trim();
         if (name === "" || value === "") continue;
-        if (STRIPPED_RESPONSE_HEADERS.has(name)) continue;
+        if (shouldStrip(name)) continue;
         headers[name] = Object.hasOwn(headers, name)
           ? `${headers[name]}, ${value}`
           : value;
